@@ -291,19 +291,23 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         // ignore.
         if (utils.isStreamStopped(e) === false) {
           if (e.message === 'StreamLimit') {
-            const limit =
-              this.type === 'bidi'
-                ? config.initialMaxStreamsBidi
-                : config.initialMaxStreamsUni;
-            throw new errors.ErrorQUICStreamLimit(
-              `Stream limit of ${limit} has been reached`,
+            // Some peers advertise `initial_max_streams_uni: 0` (or an exhausted
+            // count) and grant stream credit via MAX_STREAMS frames post-handshake
+            // (flow-controlled / stake-weighted QoS — e.g. Solana's Agave TPU-QUIC).
+            // The eager-prime `streamSend(0-length)` races ahead of that grant.
+            // Swallow StreamLimit here so the stream object is still constructed
+            // locally; the first real `writableWrite` retries `streamSend` (see the
+            // retry block there) once MAX_STREAMS has arrived. Throwing here both
+            // broke the consumer's view of stream creation AND left quiche's internal
+            // state such that later `newStream` hit `ErrorQUICUndefinedBehaviour:
+            // We should never repeat streamIds`. (cherry-picked from lmvdz/js-quic
+            // 42f75d60)
+          } else {
+            throw new errors.ErrorQUICStreamInternal(
+              `Failed to prime local stream state with a 0-length message: ${e.message}`,
               { cause: e },
             );
           }
-          throw new errors.ErrorQUICStreamInternal(
-            `Failed to prime local stream state with a 0-length message: ${e.message}`,
-            { cause: e },
-          );
         }
       }
     }
@@ -660,6 +664,14 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       return;
     }
     let sentLength: number;
+    // Bounded retry on StreamLimit: peers that advertise `initial_max_streams_uni: 0`
+    // (e.g. Solana's Agave TPU-QUIC for unstaked clients) grant credit via MAX_STREAMS
+    // frames post-handshake, so `streamSend` can fail with StreamLimit on the first
+    // attempt; a short backoff lets the receive loop process incoming MAX_STREAMS
+    // before we fail the caller (total wait bounded ~1s). (cherry-picked lmvdz 42f75d60)
+    let streamLimitRetries = 0;
+    const STREAM_LIMIT_MAX_RETRIES = 20;
+    const STREAM_LIMIT_BACKOFF_MS = 50;
     while (true) {
       try {
         const result = this.connection.conn.streamSend(
@@ -691,6 +703,15 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
             }),
           );
           return;
+        } else if (
+          (e as { message?: string }).message === 'StreamLimit' &&
+          streamLimitRetries < STREAM_LIMIT_MAX_RETRIES
+        ) {
+          streamLimitRetries++;
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, STREAM_LIMIT_BACKOFF_MS),
+          );
+          continue;
         } else {
           const e_ = new errors.ErrorQUICStreamInternal(
             'Local stream writable could not `streamSend`',

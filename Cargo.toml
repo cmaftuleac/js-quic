@@ -11,9 +11,13 @@ crate-type = ["cdylib"]
 path = "src/native/napi/lib.rs"
 
 [dependencies]
-napi = { version = "2", features = ["async", "napi6", "serde-json"] }
+# napi/napi-derive pinned to >=2.16: 2.16 added the copy-fallback so that
+# Buffer/Uint8Array/ArrayBuffer creation falls back to a copying allocation when the
+# runtime forbids EXTERNAL backing stores (V8 heap sandbox on Electron >=37 / Node 22).
+# The old 2.10.1 lacked it → "Create external arraybuffer failed" on every packet.
+napi = { version = "2.16", features = ["async", "napi6", "serde-json"] }
 serde = { version = "1.0", features = ["derive"] }
-napi-derive = { version = "2", default-features = false, features = ["strict", "compat-mode"] }
+napi-derive = { version = "2.16", default-features = false, features = ["strict", "compat-mode"] }
 quiche = { version = "0.18.0", features = ["boringssl-boring-crate", "boringssl-vendored"] }
 boring = "3"
 
