@@ -47,6 +47,12 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install -y cmake nasm golang strawberryperl
 
+      # boringssl's cmake build needs the MSVC toolchain on PATH (vcvars) or the cmake
+      # crate panics "couldn't determine visual studio generator". This sets it up.
+      - name: Set up MSVC dev environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install npm deps
         run: npm install --no-audit --no-fund
 
