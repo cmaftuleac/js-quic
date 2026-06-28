@@ -45,7 +45,11 @@ jobs:
 
       - name: Install build deps (Windows)
         if: runner.os == 'Windows'
-        run: choco install -y cmake nasm golang strawberryperl
+        run: |
+          choco install -y cmake nasm golang strawberryperl ninja
+          # The cmake crate pinned by boring-sys (0.1.49) can't detect the runner's VS 18
+          # generator. Force Ninja (used with the MSVC toolchain below) to sidestep it.
+          echo "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
 
       # boringssl's cmake build needs the MSVC toolchain on PATH (vcvars) or the cmake
       # crate panics "couldn't determine visual studio generator". This sets it up.
