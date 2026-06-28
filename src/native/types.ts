@@ -172,6 +172,7 @@ enum CongestionControlAlgorithm {
   Reno = 0,
   CUBIC = 1,
   BBR = 2,
+  BBR2 = 3,
 }
 
 enum Shutdown {
@@ -268,19 +269,7 @@ type Stats = {
   lostBytes: number;
   streamRetransBytes: number;
   pathsCount: number;
-  peerMaxIdleTimeout: number;
-  peerMaxUdpPayloadSize: number;
-  peerInitialMaxData: number;
-  peerInitialMaxStreamDataBidiLocal: number;
-  peerInitialMaxStreamDataBidiRemote: number;
-  peerInitialMaxStreamDataUni: number;
-  peerInitialMaxStreamsBidi: number;
-  peerInitialMaxStreamsUni: number;
-  peerAckDelayExponent: number;
-  peerMaxAckDelay: number;
-  peerDisableActiveMigration: boolean;
-  peerActiveConnIdLimit: number;
-  peerMaxDatagramFrameSize?: number;
+  // quiche 0.19 removed the peer_* transport-parameter fields from Stats.
 };
 
 type HostPort = {

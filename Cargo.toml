@@ -18,8 +18,12 @@ path = "src/native/napi/lib.rs"
 napi = { version = "2.16", features = ["async", "napi6", "serde-json"] }
 serde = { version = "1.0", features = ["derive"] }
 napi-derive = { version = "2.16", default-features = false, features = ["strict", "compat-mode"] }
-quiche = { version = "0.18.0", features = ["boringssl-boring-crate", "boringssl-vendored"] }
-boring = "3"
+# quiche 0.19 + boring 4: boring 3.1.0's FFI references legacy PEM_* symbols that
+# bindgen doesn't emit on Windows (DH/DSA/EC PEM), so win32 builds fail; boring 4
+# (newer boringssl) drops them and builds cleanly cross-platform. boring-sys vendors
+# boringssl by default, so the `boringssl-vendored` quiche feature is no longer needed.
+quiche = { version = "0.19.0", features = ["boringssl-boring-crate"] }
+boring = "4"
 
 [build-dependencies]
 napi-build = "2"
