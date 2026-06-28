@@ -1,0 +1,73 @@
+name: build-prebuilds
+
+# Self-contained native prebuild builder (independent of MatrixAI's org reusable
+# workflows/secrets, which a fork can't use). Builds the @matrixai/quic native binding
+# for linux-x64, win32-x64 and darwin-universal (arm64+x64) with napi-rs 2.16 and uploads
+# each as an artifact. Download them and drop into the consumer (e.g. Tesseract's
+# apps/desktop/vendor/matrixai-quic/) or publish them as platform packages.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build deps (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake golang-go
+
+      - name: Install build deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake go || true
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      - name: Install build deps (Windows)
+        if: runner.os == 'Windows'
+        run: choco install -y cmake nasm golang strawberryperl
+
+      - name: Install npm deps
+        run: npm install --no-audit --no-fund
+
+      - name: Build prebuild (Linux / Windows x64)
+        if: runner.os != 'macOS'
+        run: npm run prebuild -- --production --arch=x64
+
+      - name: Build universal prebuild (macOS arm64 + x64)
+        if: runner.os == 'macOS'
+        run: |
+          npm run prebuild -- --production --arch=arm64
+          npm run prebuild -- --production --arch=x64
+          lipo -create \
+            prebuild/quic-darwin-arm64.node \
+            prebuild/quic-darwin-x64.node \
+            -output prebuild/quic-darwin-universal.node
+          lipo -archs prebuild/quic-darwin-universal.node
+
+      - name: Upload prebuilds
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.os }}
+          path: prebuild/*.node
+          if-no-files-found: error

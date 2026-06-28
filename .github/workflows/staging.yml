@@ -1,9 +1,9 @@
 name: "CI / Staging"
 
+# Neutralized on this fork: the MatrixAI org reusable workflow + secrets it needs don't
+# exist here, so auto-running on push only produces red failures. Left for reference;
+# native prebuilds are built by build-prebuilds.yml instead. Manual-dispatch only.
 on:
-  push:
-    branches:
-      - staging
   workflow_dispatch:
 
 concurrency:
